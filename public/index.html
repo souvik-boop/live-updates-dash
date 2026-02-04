@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Live Updates Dashboard</title>
+  <title>Mission Control</title>
   <style>
     * {
       margin: 0;
@@ -256,11 +256,110 @@
       background: #2a2a2a;
       border-color: #3a3a3a;
     }
+
+    .tabs {
+      max-width: 1400px;
+      margin: 0 auto 20px;
+      display: flex;
+      gap: 10px;
+      border-bottom: 2px solid #2a2a2a;
+    }
+
+    .tab-btn {
+      background: none;
+      border: none;
+      color: #999;
+      padding: 12px 24px;
+      font-size: 1rem;
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+      transition: all 0.2s;
+      font-weight: 500;
+    }
+
+    .tab-btn:hover {
+      color: #e0e0e0;
+    }
+
+    .tab-btn.active {
+      color: #667eea;
+      border-bottom-color: #667eea;
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    .schedule-container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    .schedule-card {
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 15px;
+      border-left: 4px solid #667eea;
+    }
+
+    .schedule-card.disabled {
+      opacity: 0.5;
+      border-left-color: #666;
+    }
+
+    .schedule-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .schedule-name {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .schedule-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .schedule-badge.enabled {
+      background: #10b98120;
+      color: #10b981;
+    }
+
+    .schedule-badge.disabled {
+      background: #66666620;
+      color: #666;
+    }
+
+    .schedule-details {
+      color: #999;
+      font-size: 0.9rem;
+      line-height: 1.8;
+    }
+
+    .schedule-next {
+      color: #667eea;
+      font-weight: 600;
+    }
   </style>
 </head>
 <body>
   <div class="header">
-    <h1>📊 Live Updates Dashboard</h1>
+    <h1>🚀 Mission Control</h1>
     <div class="status">
       <div class="status-item" id="connection-status">Connecting...</div>
       <div class="status-item" id="task-count">0 tasks</div>
@@ -268,10 +367,25 @@
     </div>
   </div>
 
-  <div class="tasks-grid" id="tasks-grid">
-    <div class="empty-state">
-      <h2>No active tasks</h2>
-      <p>Tasks will appear here when background jobs are running</p>
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('tasks')">Active Tasks</button>
+    <button class="tab-btn" onclick="switchTab('schedule')">Schedule</button>
+  </div>
+
+  <div class="tab-content active" id="tasks-tab">
+    <div class="tasks-grid" id="tasks-grid">
+      <div class="empty-state">
+        <h2>No active tasks</h2>
+        <p>Tasks will appear here when background jobs are running</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="tab-content" id="schedule-tab">
+    <div class="schedule-container" id="schedule-container">
+      <div class="empty-state">
+        <h2>Loading schedule...</h2>
+      </div>
     </div>
   </div>
 
@@ -536,6 +650,91 @@
         }
       });
     }, 1000);
+
+    // Tab switching
+    function switchTab(tabName) {
+      // Update buttons
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      event.target.classList.add('active');
+      
+      // Update content
+      document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+      document.getElementById(`${tabName}-tab`).classList.add('active');
+      
+      // Load schedule if switching to it
+      if (tabName === 'schedule') {
+        loadSchedule();
+      }
+    }
+
+    // Load schedule from OpenClaw cron
+    async function loadSchedule() {
+      try {
+        const response = await fetch('http://localhost:4848/api/cron/list');
+        const data = await response.json();
+        
+        const container = document.getElementById('schedule-container');
+        
+        if (!data.jobs || data.jobs.length === 0) {
+          container.innerHTML = `
+            <div class="empty-state">
+              <h2>No scheduled jobs</h2>
+              <p>Cron jobs will appear here when configured</p>
+            </div>
+          `;
+          return;
+        }
+        
+        container.innerHTML = data.jobs.map(job => {
+          const nextRun = job.state?.nextRunAtMs ? new Date(job.state.nextRunAtMs) : null;
+          const isUpcoming = nextRun && (nextRun - Date.now()) < 24 * 60 * 60 * 1000;
+          
+          return `
+            <div class="schedule-card ${job.enabled ? '' : 'disabled'}">
+              <div class="schedule-header">
+                <div class="schedule-name">${job.name}</div>
+                <span class="schedule-badge ${job.enabled ? 'enabled' : 'disabled'}">
+                  ${job.enabled ? 'Enabled' : 'Disabled'}
+                </span>
+              </div>
+              <div class="schedule-details">
+                <div><strong>Schedule:</strong> ${formatCron(job.schedule)}</div>
+                ${nextRun ? `<div class="schedule-next">⏰ Next run: ${nextRun.toLocaleString()} ${isUpcoming ? '(Soon!)' : ''}</div>` : ''}
+                ${job.payload?.message ? `<div><strong>Task:</strong> ${job.payload.message.substring(0, 100)}...</div>` : ''}
+              </div>
+            </div>
+          `;
+        }).join('');
+        
+      } catch (err) {
+        console.error('Failed to load schedule:', err);
+        document.getElementById('schedule-container').innerHTML = `
+          <div class="empty-state">
+            <h2>⚠️ Could not load schedule</h2>
+            <p>Make sure OpenClaw gateway is running</p>
+          </div>
+        `;
+      }
+    }
+
+    function formatCron(schedule) {
+      if (schedule.kind === 'cron') {
+        return `${schedule.expr} (${schedule.tz || 'UTC'})`;
+      } else if (schedule.kind === 'at') {
+        return `One-time at ${new Date(schedule.atMs).toLocaleString()}`;
+      } else if (schedule.kind === 'every') {
+        const mins = schedule.everyMs / 60000;
+        return `Every ${mins} minutes`;
+      }
+      return 'Unknown';
+    }
+
+    // Refresh schedule every 30 seconds when on that tab
+    setInterval(() => {
+      if (document.getElementById('schedule-tab').classList.contains('active')) {
+        loadSchedule();
+      }
+    }, 30000);
   </script>
 </body>
 </html>
