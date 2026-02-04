@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Live Updates Dashboard</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: #0f0f0f;
+      color: #e0e0e0;
+      padding: 20px;
+      line-height: 1.6;
+    }
+
+    .header {
+      max-width: 1400px;
+      margin: 0 auto 30px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .status {
+      display: flex;
+      gap: 15px;
+      font-size: 0.9rem;
+    }
+
+    .status-item {
+      background: #1a1a1a;
+      padding: 8px 16px;
+      border-radius: 8px;
+      border: 1px solid #2a2a2a;
+    }
+
+    .status-item.connected {
+      border-color: #10b981;
+      color: #10b981;
+    }
+
+    .tasks-grid {
+      max-width: 1400px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+      gap: 20px;
+    }
+
+    .task-card {
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 12px;
+      padding: 20px;
+      transition: border-color 0.3s ease, box-shadow 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .task-card:hover {
+      border-color: #667eea;
+      box-shadow: 0 8px 30px rgba(102, 126, 234, 0.15);
+    }
+
+    .task-card.running {
+      border-left: 4px solid #3b82f6;
+    }
+
+    .task-card.complete {
+      border-left: 4px solid #10b981;
+    }
+
+    .task-card.failed {
+      border-left: 4px solid #ef4444;
+    }
+
+    .task-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 15px;
+    }
+
+    .task-name {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .task-status {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .task-status.running {
+      background: #3b82f620;
+      color: #3b82f6;
+    }
+
+    .task-status.complete {
+      background: #10b98120;
+      color: #10b981;
+    }
+
+    .task-status.failed {
+      background: #ef444420;
+      color: #ef4444;
+    }
+
+    .task-progress {
+      margin: 15px 0;
+    }
+
+    .progress-bar {
+      height: 8px;
+      background: #2a2a2a;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 8px;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+      transition: width 0.3s ease;
+      border-radius: 4px;
+    }
+
+    .progress-text {
+      font-size: 0.85rem;
+      color: #999;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .task-logs {
+      background: #0f0f0f;
+      border-radius: 8px;
+      padding: 12px;
+      max-height: 200px;
+      overflow-y: auto;
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: 0.8rem;
+      margin-top: 12px;
+    }
+
+    .task-logs::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .task-logs::-webkit-scrollbar-track {
+      background: #1a1a1a;
+    }
+
+    .task-logs::-webkit-scrollbar-thumb {
+      background: #3a3a3a;
+      border-radius: 3px;
+    }
+
+    .log-entry {
+      margin-bottom: 4px;
+    }
+
+    .log-entry.info {
+      color: #60a5fa;
+    }
+
+    .log-entry.success {
+      color: #10b981;
+    }
+
+    .log-entry.error {
+      color: #ef4444;
+    }
+
+    .log-entry.warn {
+      color: #f59e0b;
+    }
+
+    .task-meta {
+      display: flex;
+      gap: 15px;
+      font-size: 0.8rem;
+      color: #666;
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid #2a2a2a;
+    }
+
+    .task-summary {
+      background: #0f0f0f;
+      border-radius: 8px;
+      padding: 12px;
+      margin-top: 12px;
+      font-size: 0.9rem;
+      white-space: pre-wrap;
+    }
+
+    .empty-state {
+      grid-column: 1 / -1;
+      text-align: center;
+      padding: 60px 20px;
+      color: #666;
+    }
+
+    .empty-state h2 {
+      font-size: 1.5rem;
+      margin-bottom: 10px;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid #3b82f620;
+      border-top-color: #3b82f6;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-left: 8px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .clear-btn {
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      color: #e0e0e0;
+      padding: 8px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      transition: all 0.2s;
+    }
+
+    .clear-btn:hover {
+      background: #2a2a2a;
+      border-color: #3a3a3a;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>📊 Live Updates Dashboard</h1>
+    <div class="status">
+      <div class="status-item" id="connection-status">Connecting...</div>
+      <div class="status-item" id="task-count">0 tasks</div>
+      <button class="clear-btn" onclick="clearCompleted()">Clear Completed</button>
+    </div>
+  </div>
+
+  <div class="tasks-grid" id="tasks-grid">
+    <div class="empty-state">
+      <h2>No active tasks</h2>
+      <p>Tasks will appear here when background jobs are running</p>
+    </div>
+  </div>
+
+  <script>
+    const tasksGrid = document.getElementById('tasks-grid');
+    const connectionStatus = document.getElementById('connection-status');
+    const taskCount = document.getElementById('task-count');
+    
+    const tasks = new Map();
+    let ws = null;
+
+    function connect() {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      ws = new WebSocket(`${protocol}//${window.location.host}`);
+
+      ws.onopen = () => {
+        connectionStatus.textContent = '🟢 Connected';
+        connectionStatus.classList.add('connected');
+      };
+
+      ws.onclose = () => {
+        connectionStatus.textContent = '🔴 Disconnected';
+        connectionStatus.classList.remove('connected');
+        setTimeout(connect, 2000);
+      };
+
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        
+        switch (data.type) {
+          case 'init':
+            data.tasks.forEach(task => {
+              tasks.set(task.id, task);
+            });
+            render();
+            break;
+            
+          case 'task-update':
+            tasks.set(data.task.id, data.task);
+            updateTask(data.task);
+            break;
+            
+          case 'task-log':
+            const task = tasks.get(data.taskId);
+            if (task) {
+              if (!task.logs) task.logs = [];
+              task.logs.push(data.log);
+              if (task.logs.length > 100) {
+                task.logs = task.logs.slice(-100);
+              }
+              updateTaskLogs(data.taskId, task.logs);
+            }
+            break;
+            
+          case 'tasks-cleared':
+            data.ids.forEach(id => tasks.delete(id));
+            render();
+            break;
+        }
+      };
+    }
+
+    function formatDuration(startTime, endTime) {
+      const duration = (endTime || Date.now()) - startTime;
+      const seconds = Math.floor(duration / 1000);
+      const minutes = Math.floor(seconds / 60);
+      const hours = Math.floor(minutes / 60);
+      
+      if (hours > 0) {
+        return `${hours}h ${minutes % 60}m`;
+      } else if (minutes > 0) {
+        return `${minutes}m ${seconds % 60}s`;
+      } else {
+        return `${seconds}s`;
+      }
+    }
+
+    function formatTime(timestamp) {
+      return new Date(timestamp).toLocaleTimeString();
+    }
+
+    function createTaskCard(task) {
+      const card = document.createElement('div');
+      card.id = `task-${task.id}`;
+      card.className = `task-card ${task.status}`;
+      
+      const progress = task.total > 0 ? (task.progress / task.total) * 100 : 0;
+      const duration = formatDuration(task.startTime, task.endTime);
+      
+      card.innerHTML = `
+        <div class="task-header">
+          <div class="task-name">
+            ${task.name}
+            ${task.status === 'running' ? '<span class="spinner"></span>' : ''}
+          </div>
+          <span class="task-status ${task.status}">${task.status}</span>
+        </div>
+        
+        ${task.total > 0 ? `
+          <div class="task-progress">
+            <div class="progress-bar">
+              <div class="progress-fill" style="width: ${progress}%"></div>
+            </div>
+            <div class="progress-text">
+              <span><span class="progress-current">${task.progress.toLocaleString()}</span> / <span class="progress-total">${task.total.toLocaleString()}</span></span>
+              <span class="progress-percent">${Math.round(progress)}%</span>
+            </div>
+          </div>
+        ` : ''}
+        
+        <div class="task-logs" data-log-count="0"></div>
+        
+        ${task.summary ? `<div class="task-summary">${task.summary}</div>` : ''}
+        
+        <div class="task-meta">
+          <span>Started: ${formatTime(task.startTime)}</span>
+          <span class="task-duration">Duration: ${duration}</span>
+        </div>
+      `;
+      
+      return card;
+    }
+
+    function updateTask(task) {
+      let card = document.getElementById(`task-${task.id}`);
+      
+      if (!card) {
+        // Clear empty state if present
+        const emptyState = tasksGrid.querySelector('.empty-state');
+        if (emptyState) emptyState.remove();
+        
+        // Create new card
+        card = createTaskCard(task);
+        tasksGrid.appendChild(card);
+        return;
+      }
+
+      // Update status and class
+      card.className = `task-card ${task.status}`;
+      
+      const statusEl = card.querySelector('.task-status');
+      if (statusEl) {
+        statusEl.textContent = task.status;
+        statusEl.className = `task-status ${task.status}`;
+      }
+      
+      const nameEl = card.querySelector('.task-name');
+      if (nameEl) {
+        const spinner = task.status === 'running' ? '<span class="spinner"></span>' : '';
+        nameEl.innerHTML = `${task.name}${spinner}`;
+      }
+      
+      // Update progress
+      if (task.total > 0) {
+        const progress = (task.progress / task.total) * 100;
+        const fillEl = card.querySelector('.progress-fill');
+        const currentEl = card.querySelector('.progress-current');
+        const totalEl = card.querySelector('.progress-total');
+        const percentEl = card.querySelector('.progress-percent');
+        
+        if (fillEl) fillEl.style.width = `${progress}%`;
+        if (currentEl) currentEl.textContent = task.progress.toLocaleString();
+        if (totalEl) totalEl.textContent = task.total.toLocaleString();
+        if (percentEl) percentEl.textContent = `${Math.round(progress)}%`;
+      }
+      
+      // Update duration
+      const durationEl = card.querySelector('.task-duration');
+      if (durationEl) {
+        const duration = formatDuration(task.startTime, task.endTime);
+        durationEl.textContent = `Duration: ${duration}`;
+      }
+      
+      // Update summary
+      if (task.summary) {
+        let summaryEl = card.querySelector('.task-summary');
+        if (!summaryEl) {
+          summaryEl = document.createElement('div');
+          summaryEl.className = 'task-summary';
+          card.insertBefore(summaryEl, card.querySelector('.task-meta'));
+        }
+        summaryEl.textContent = task.summary;
+      }
+      
+      taskCount.textContent = `${tasks.size} task${tasks.size !== 1 ? 's' : ''}`;
+    }
+
+    function updateTaskLogs(taskId, logs) {
+      const card = document.getElementById(`task-${taskId}`);
+      if (!card) return;
+      
+      const logsEl = card.querySelector('.task-logs');
+      if (!logsEl) return;
+      
+      const currentLogCount = parseInt(logsEl.dataset.logCount || '0');
+      
+      // Only update if new logs added
+      if (logs.length > currentLogCount) {
+        const fragment = document.createDocumentFragment();
+        const newLogs = logs.slice(currentLogCount);
+        
+        newLogs.forEach(log => {
+          const logEntry = document.createElement('div');
+          logEntry.className = `log-entry ${log.level}`;
+          logEntry.textContent = `${formatTime(log.timestamp)} ${log.message}`;
+          fragment.appendChild(logEntry);
+        });
+        
+        logsEl.appendChild(fragment);
+        logsEl.dataset.logCount = logs.length;
+        logsEl.scrollTop = logsEl.scrollHeight;
+      }
+    }
+
+    function render() {
+      taskCount.textContent = `${tasks.size} task${tasks.size !== 1 ? 's' : ''}`;
+      
+      if (tasks.size === 0) {
+        tasksGrid.innerHTML = `
+          <div class="empty-state">
+            <h2>No active tasks</h2>
+            <p>Tasks will appear here when background jobs are running</p>
+          </div>
+        `;
+        return;
+      }
+
+      // Clear and rebuild
+      tasksGrid.innerHTML = '';
+      
+      tasks.forEach(task => {
+        const card = createTaskCard(task);
+        tasksGrid.appendChild(card);
+        
+        // Update logs if any
+        if (task.logs && task.logs.length > 0) {
+          updateTaskLogs(task.id, task.logs);
+        }
+      });
+    }
+
+    async function clearCompleted() {
+      try {
+        await fetch('/api/tasks/clear', { method: 'DELETE' });
+      } catch (err) {
+        console.error('Failed to clear tasks:', err);
+      }
+    }
+
+    connect();
+    
+    // Update durations every second
+    setInterval(() => {
+      tasks.forEach(task => {
+        const card = document.getElementById(`task-${task.id}`);
+        if (card) {
+          const durationEl = card.querySelector('.task-duration');
+          if (durationEl) {
+            const duration = formatDuration(task.startTime, task.endTime);
+            durationEl.textContent = `Duration: ${duration}`;
+          }
+        }
+      });
+    }, 1000);
+  </script>
+</body>
+</html>
